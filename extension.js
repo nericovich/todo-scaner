@@ -44,6 +44,21 @@ async function scanFile(uri, config, regex) {
   }
 }
 
+/** Markdown checklist grouped by tag, in the order tags are listed in settings. */
+function buildPlan(tags) {
+  const lines = ['# Plan', ''];
+  for (const tag of tags) {
+    const group = items.filter((i) => i.tag === tag);
+    if (!group.length) continue;
+    lines.push(`## ${tag} (${group.length})`, '');
+    for (const i of group) {
+      lines.push(`- [ ] ${i.text || '(no text)'} — \`${vscode.workspace.asRelativePath(i.uri)}:${i.line + 1}\``);
+    }
+    lines.push('');
+  }
+  return lines.join('\n');
+}
+
 class TodoTree {
   constructor() {
     this.emitter = new vscode.EventEmitter();
@@ -111,6 +126,10 @@ function activate(context) {
   context.subscriptions.push(
     view,
     vscode.commands.registerCommand('todoScanner.refresh', scanAll),
+    vscode.commands.registerCommand('todoScanner.generatePlan', async () => {
+      const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: buildPlan(getConfig().tags) });
+      vscode.window.showTextDocument(doc);
+    }),
     vscode.commands.registerCommand('todoScanner.openSettings', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${context.extension.id}`),
     ),

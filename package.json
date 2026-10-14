@@ -47,6 +47,12 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "todoScanner.generatePlan",
+        "title": "Generate Plan",
+        "category": "TODO Scanner",
+        "icon": "$(checklist)"
+      },
+      {
         "command": "todoScanner.openSettings",
         "title": "Open Settings",
         "category": "TODO Scanner",
@@ -59,6 +65,11 @@
           "command": "todoScanner.refresh",
           "when": "view == todoScanner.view",
           "group": "navigation@1"
+        },
+        {
+          "command": "todoScanner.generatePlan",
+          "when": "view == todoScanner.view",
+          "group": "navigation@2"
         },
         {
           "command": "todoScanner.openSettings",
