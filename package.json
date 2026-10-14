@@ -15,5 +15,117 @@
   "activationEvents": [
     "onStartupFinished"
   ],
-  "contributes": {}
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "todoScanner",
+          "title": "TODO Scanner",
+          "icon": "$(checklist)"
+        }
+      ]
+    },
+    "views": {
+      "todoScanner": [
+        {
+          "id": "todoScanner.view",
+          "name": "Tasks"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "todoScanner.view",
+        "contents": "No tasks found.\n[Rescan](command:todoScanner.refresh)\n[Open Settings](command:todoScanner.openSettings)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "todoScanner.refresh",
+        "title": "Refresh",
+        "category": "TODO Scanner",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "todoScanner.openSettings",
+        "title": "Open Settings",
+        "category": "TODO Scanner",
+        "icon": "$(gear)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "todoScanner.refresh",
+          "when": "view == todoScanner.view",
+          "group": "navigation@1"
+        },
+        {
+          "command": "todoScanner.openSettings",
+          "when": "view == todoScanner.view",
+          "group": "navigation@3"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "TODO Scanner",
+      "properties": {
+        "todoScanner.tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "BUG",
+            "FIXME",
+            "TODO",
+            "HACK",
+            "NOTE"
+          ],
+          "order": 0,
+          "description": "Tags to look for. Order matters: it is used as priority when grouping by tag and in the plan."
+        },
+        "todoScanner.caseSensitive": {
+          "type": "boolean",
+          "default": false,
+          "order": 1,
+          "description": "Match tags case-sensitively (todo vs TODO)."
+        },
+        "todoScanner.pattern": {
+          "type": "string",
+          "default": "(?://|#|/\\*|\\*|<!--|--)\\s*($TAGS)\\b[:\\s-]*(.*)",
+          "order": 2,
+          "markdownDescription": "Regular expression applied to each line. `$TAGS` is replaced with the tags above. Group 1 must capture the tag, group 2 the task text. The default matches tags right after a comment marker (`//`, `#`, `/*`, `*`, `<!--`, `--`)."
+        },
+        "todoScanner.include": {
+          "type": "string",
+          "default": "**/*",
+          "order": 3,
+          "description": "Glob pattern of files to scan."
+        },
+        "todoScanner.exclude": {
+          "type": "string",
+          "default": "**/{node_modules,.git,out,dist,build}/**",
+          "order": 4,
+          "description": "Glob pattern of files to skip."
+        },
+        "todoScanner.maxFiles": {
+          "type": "number",
+          "default": 5000,
+          "order": 5,
+          "description": "Maximum number of files to scan."
+        },
+        "todoScanner.groupBy": {
+          "type": "string",
+          "enum": [
+            "file",
+            "tag"
+          ],
+          "default": "file",
+          "order": 6,
+          "description": "How to group tasks in the sidebar."
+        }
+      }
+    }
+  }
 }
