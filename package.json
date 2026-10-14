@@ -1,0 +1,19 @@
+{
+  "name": "todo-scanner",
+  "displayName": "TODO Scanner",
+  "description": "Finds TODO, FIXME, BUG and custom tags in the project and lists them in a sidebar.",
+  "version": "0.1.0",
+  "publisher": "neri",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {}
+}
