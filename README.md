@@ -6,6 +6,21 @@
 
 Откройте папку в VS Code и нажмите **F5** — запустится окно с расширением. Сборка и зависимости не нужны.
 
+## Сборка и установка
+
+Чтобы расширение работало всегда, без F5, соберите `.vsix` и установите его (нужен Node.js):
+
+```bash
+npx @vscode/vsce package --allow-missing-repository --skip-license -o todo-scanner.vsix
+code --install-extension todo-scanner.vsix --force
+```
+
+Затем перезапустите VS Code. После изменений в коде повторите обе команды — `--force` заменит установленную версию.
+
+Если `code` не найден в терминале: в VS Code выполните ⇧⌘P → **Shell Command: Install 'code' command in PATH**. Или установите вручную: вкладка Extensions → `⋯` → **Install from VSIX…**.
+
+Удалить: `code --uninstall-extension neri.todo-scanner`.
+
 ## Использование
 
 - Иконка **TODO Scanner** в Activity Bar — список найденных задач (клик открывает строку).
