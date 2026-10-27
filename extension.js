@@ -1,8 +1,16 @@
 const vscode = require('vscode');
 
-/** @type {{ uri: vscode.Uri, line: number, tag: string, text: string }[]} */
+/**
+ * Все найденные задачи. Общее хранилище для дерева и плана.
+ * @type {{ uri: vscode.Uri, line: number, tag: string, text: string }[]}
+ */
 let items = [];
 
+/**
+ * Читает настройки расширения (секция `todoScanner`).
+ * Вызывается при каждом скане, поэтому изменения настроек применяются сразу.
+ * @returns {{ tags: string[], caseSensitive: boolean, pattern: string, include: string, exclude: string, maxFiles: number, groupBy: 'file' | 'tag' }}
+ */
 function getConfig() {
   const c = vscode.workspace.getConfiguration('todoScanner');
   return {
@@ -16,18 +24,32 @@ function getConfig() {
   };
 }
 
+/**
+ * Собирает регулярку из шаблона настроек: подставляет вместо `$TAGS`
+ * экранированные метки через `|` (например `BUG|FIXME|TODO`).
+ * @param {ReturnType<typeof getConfig>} config настройки
+ * @returns {RegExp} регулярка: группа 1 — метка, группа 2 — текст
+ * @throws {SyntaxError} если шаблон в настройках некорректный
+ */
 function buildRegex(config) {
   const tags = config.tags.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
   return new RegExp(config.pattern.replace('$TAGS', () => tags), config.caseSensitive ? '' : 'i');
 }
 
-/** Finds tags in a file's text. Group 1 of the pattern is the tag, group 2 the text. */
+/**
+ * Ищет метки в тексте файла построчно.
+ * @param {vscode.Uri} uri файл, из которого текст
+ * @param {string} text содержимое файла
+ * @param {ReturnType<typeof getConfig>} config настройки
+ * @param {RegExp} regex регулярка из buildRegex
+ * @returns {typeof items} найденные задачи (номера строк с 0)
+ */
 function parse(uri, text, config, regex) {
   const found = [];
   text.split(/\r?\n/).forEach((line, i) => {
     const m = regex.exec(line);
     if (!m) return;
-    // Use the spelling from settings so "todo" and "TODO" end up in one group.
+    // Метка пишется как в настройках, чтобы "todo" и "TODO" попали в одну группу.
     const tag = config.tags.find((t) => t.toLowerCase() === m[1].toLowerCase()) || m[1];
     const text = (m[2] || '').replace(/\s*(\*\/|-->)\s*$/, '').trim();
     found.push({ uri, line: i, tag, text });
@@ -35,16 +57,29 @@ function parse(uri, text, config, regex) {
   return found;
 }
 
+/**
+ * Читает файл с диска и разбирает его через parse.
+ * Бинарные файлы (с байтом `\0`) и ошибки чтения дают пустой результат.
+ * @param {vscode.Uri} uri файл
+ * @param {ReturnType<typeof getConfig>} config настройки
+ * @param {RegExp} regex регулярка из buildRegex
+ * @returns {Promise<typeof items>} найденные задачи
+ */
 async function scanFile(uri, config, regex) {
   try {
     const text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
-    return text.includes('\0') ? [] : parse(uri, text, config, regex); // skip binary files
+    return text.includes('\0') ? [] : parse(uri, text, config, regex);
   } catch {
     return [];
   }
 }
 
-/** Markdown checklist grouped by tag, in the order tags are listed in settings. */
+/**
+ * Строит план — Markdown-чеклист, сгруппированный по меткам.
+ * Порядок разделов = порядок меток в настройках (приоритет).
+ * @param {string[]} tags метки из настроек
+ * @returns {string} текст плана в Markdown
+ */
 function buildPlan(tags) {
   const lines = ['# Plan', ''];
   for (const tag of tags) {
@@ -59,16 +94,27 @@ function buildPlan(tags) {
   return lines.join('\n');
 }
 
+/**
+ * Источник данных для панели задач (TreeDataProvider).
+ * Узлы дерева: группа `{ label, items }` или задача из `items`.
+ */
 class TodoTree {
+  /** Создаёт событие, через которое VS Code узнаёт об изменении данных. */
   constructor() {
     this.emitter = new vscode.EventEmitter();
     this.onDidChangeTreeData = this.emitter.event;
   }
 
+  /** Просит VS Code перерисовать дерево. */
   refresh() {
     this.emitter.fire();
   }
 
+  /**
+   * Возвращает дочерние узлы.
+   * Без аргумента — группы (по файлу или по метке), с группой — её задачи.
+   * @param {{ label: string, items: typeof items } | undefined} group
+   */
   getChildren(group) {
     if (group) return group.items;
     const { groupBy, tags } = getConfig();
@@ -82,6 +128,12 @@ class TodoTree {
     return [...groups.values()].sort((a, b) => order(a.label) - order(b.label) || a.label.localeCompare(b.label));
   }
 
+  /**
+   * Превращает узел в элемент дерева: у группы — число задач,
+   * у задачи — метка и `файл:строка`, клик открывает эту строку.
+   * @param {object} node группа или задача
+   * @returns {vscode.TreeItem}
+   */
   getTreeItem(node) {
     if (node.items) {
       const ti = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Expanded);
@@ -99,15 +151,25 @@ class TodoTree {
   }
 }
 
+/**
+ * Точка входа: VS Code вызывает её при запуске расширения.
+ * Создаёт панель, регистрирует команды и подписки, запускает первый скан.
+ * @param {vscode.ExtensionContext} context контекст; всё из `subscriptions` освобождается при выключении
+ */
 function activate(context) {
   const tree = new TodoTree();
   const view = vscode.window.createTreeView('todoScanner.view', { treeDataProvider: tree });
 
+  /** Обновляет бейдж с числом задач на иконке и перерисовывает дерево. */
   const update = () => {
     view.badge = items.length ? { value: items.length, tooltip: `${items.length} tasks` } : undefined;
     tree.refresh();
   };
 
+  /**
+   * Полный скан проекта: находит файлы по include/exclude и параллельно их разбирает.
+   * При ошибке в регулярке показывает сообщение и ничего не меняет.
+   */
   const scanAll = async () => {
     const config = getConfig();
     let regex;
@@ -125,15 +187,18 @@ function activate(context) {
 
   context.subscriptions.push(
     view,
+    // Кнопка Refresh: пересканировать весь проект.
     vscode.commands.registerCommand('todoScanner.refresh', scanAll),
+    // Кнопка Generate Plan: открыть план в новом несохранённом документе.
     vscode.commands.registerCommand('todoScanner.generatePlan', async () => {
       const doc = await vscode.workspace.openTextDocument({ language: 'markdown', content: buildPlan(getConfig().tags) });
       vscode.window.showTextDocument(doc);
     }),
+    // Кнопка ⚙: открыть настройки VS Code, отфильтрованные по этому расширению.
     vscode.commands.registerCommand('todoScanner.openSettings', () =>
       vscode.commands.executeCommand('workbench.action.openSettings', `@ext:${context.extension.id}`),
     ),
-    // Rescan only the saved file instead of the whole project.
+    // При сохранении пересканируется только этот файл, а не весь проект.
     vscode.workspace.onDidSaveTextDocument((doc) => {
       const config = getConfig();
       const inProject =
@@ -144,11 +209,12 @@ function activate(context) {
         try {
           items.push(...parse(doc.uri, doc.getText(), config, buildRegex(config)));
         } catch {
-          // invalid pattern is reported by scanAll
+          // об ошибке в регулярке сообщает scanAll
         }
       }
       update();
     }),
+    // При изменении настроек расширения — полное пересканирование.
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('todoScanner')) scanAll();
     }),
@@ -157,6 +223,7 @@ function activate(context) {
   scanAll();
 }
 
+/** Вызывается при выключении расширения. Ресурсы освобождает VS Code через `context.subscriptions`. */
 function deactivate() {}
 
 module.exports = { activate, deactivate };
