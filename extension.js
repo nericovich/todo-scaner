@@ -168,21 +168,27 @@ function activate(context) {
 
   /**
    * Полный скан проекта: находит файлы по include/exclude и параллельно их разбирает.
-   * При ошибке в регулярке показывает сообщение и ничего не меняет.
+   * Пока идёт скан, в панели крутится индикатор, итог пишется в строку состояния.
+   * Любая ошибка показывается с типом (например `SyntaxError: ...`), список при этом не меняется.
    */
   const scanAll = async () => {
-    const config = getConfig();
-    let regex;
-    try {
-      regex = buildRegex(config);
-    } catch (e) {
-      vscode.window.showErrorMessage(`TODO Scanner: invalid pattern — ${e.message}`);
+    if (!vscode.workspace.workspaceFolders) {
+      vscode.window.showWarningMessage('TODO Scanner: open a folder to scan for tasks.');
       return;
     }
-    const files = await vscode.workspace.findFiles(config.include, config.exclude, config.maxFiles);
-    const results = await Promise.all(files.map((uri) => scanFile(uri, config, regex)));
-    items = results.flat();
-    update();
+    try {
+      const config = getConfig();
+      const regex = buildRegex(config);
+      await vscode.window.withProgress({ location: { viewId: 'todoScanner.view' } }, async () => {
+        const files = await vscode.workspace.findFiles(config.include, config.exclude, config.maxFiles);
+        const results = await Promise.all(files.map((uri) => scanFile(uri, config, regex)));
+        items = results.flat();
+        vscode.window.setStatusBarMessage(`TODO Scanner: ${items.length} tasks in ${files.length} files`, 4000);
+      });
+      update();
+    } catch (e) {
+      vscode.window.showErrorMessage(`TODO Scanner: ${e.name}: ${e.message}`);
+    }
   };
 
   context.subscriptions.push(
