@@ -130,7 +130,7 @@ class TodoTree {
 
   /**
    * Превращает узел в элемент дерева: у группы — число задач,
-   * у задачи — метка и `файл:строка`, клик открывает эту строку.
+   * у задачи — `МЕТКА: текст` (метка выделена) и `файл:строка`, клик открывает эту строку.
    * @param {object} node группа или задача
    * @returns {vscode.TreeItem}
    */
@@ -140,8 +140,9 @@ class TodoTree {
       ti.description = String(node.items.length);
       return ti;
     }
-    const ti = new vscode.TreeItem(node.text || node.tag);
-    ti.description = `${node.tag} · ${vscode.workspace.asRelativePath(node.uri)}:${node.line + 1}`;
+    const label = node.text ? `${node.tag}: ${node.text}` : node.tag;
+    const ti = new vscode.TreeItem({ label, highlights: [[0, node.tag.length]] });
+    ti.description = `${vscode.workspace.asRelativePath(node.uri)}:${node.line + 1}`;
     ti.command = {
       command: 'vscode.open',
       title: 'Open',
